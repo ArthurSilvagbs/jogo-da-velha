@@ -1,0 +1,12 @@
+{
+  "name": "velha-cloud",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jogo da Velha Cloud Edition: pixel art, IA minimax e deploy em S3 + CloudFront",
+  "scripts": {
+    "test": "node --test tests/game.test.js",
+    "dev": "python -m http.server 5173 -d public",
+    "build": "node scripts/build.js"
+  },
+  "engines": { "node": ">=18" }
+}

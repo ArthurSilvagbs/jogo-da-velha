@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Jogo da Velha Cloud Edition - bucket S3 privado + CloudFront (HTTPS, HTTP/3, cache na borda).
+
+# Receita da infraestrutura. Suba este arquivo no CloudFormation e a AWS cria tudo sozinha:
+#   1. SiteBucket          -> onde ficam os arquivos do jogo (privado, ninguem acessa direto)
+#   2. OriginAccessControl -> o "cracha" que deixa so o CloudFront ler o bucket
+#   3. Distribution        -> a CDN: copia o jogo para servidores perto de quem joga
+#   4. SiteBucketPolicy    -> a regra do bucket: "so essa distribuicao do CloudFront pode ler"
+
+Resources:
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-oac'
+        Description: Permite que somente o CloudFront leia o bucket do jogo
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub '${AWS::StackName} - Jogo da Velha Cloud Edition'
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_All
+        Origins:
+          - Id: s3-site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: s3-site
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          # Politicas gerenciadas pela AWS: "CachingOptimized" e "SecurityHeadersPolicy"
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${SiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+Outputs:
+  SiteURL:
+    Description: Endereco do jogo (abra no navegador)
+    Value: !Sub 'https://${Distribution.DomainName}'
+  BucketName:
+    Description: Nome do bucket onde voce sobe os arquivos de dist/
+    Value: !Ref SiteBucket
+  BucketLink:
+    Description: Atalho para abrir o bucket no console e fazer o upload
+    Value: !Sub 'https://s3.console.aws.amazon.com/s3/buckets/${SiteBucket}?region=${AWS::Region}'
+  DistributionId:
+    Description: ID da distribuicao do CloudFront
+    Value: !Ref Distribution
+  InvalidationLink:
+    Description: Atalho para limpar o cache depois de subir uma versao nova
+    Value: !Sub 'https://us-east-1.console.aws.amazon.com/cloudfront/v4/home#/distributions/${Distribution}/invalidations'

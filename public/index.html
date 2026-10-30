@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jogo da Velha — Cloud Edition</title>
+  <meta name="description" content="Jogo da velha em pixel art contra a NIMBUS, uma IA minimax, servido pela AWS (S3 + CloudFront).">
+  <meta name="theme-color" content="#E2231A">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geologica:wght@400;600;700&family=Press+Start+2P&family=Silkscreen&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Tela de boot: aparece ao carregar e libera o áudio no primeiro clique -->
+  <section class="boot" id="boot" aria-labelledby="bootTitle">
+    <div class="boot__inner">
+      <p class="boot__eyebrow pixel">VELHA.OS v1.0</p>
+      <h1 class="boot__title pixel" id="bootTitle">Jogo<br>da velha</h1>
+      <p class="boot__tag pixel">Cloud edition</p>
+      <ol class="boot__log pixel" id="bootLog"></ol>
+      <button class="btn btn--light boot__start" id="startBtn" type="button" disabled>
+        <span class="caret" aria-hidden="true">▶</span> Aperte start
+      </button>
+      <p class="boot__hint">ou pressione <kbd>Enter</kbd></p>
+    </div>
+  </section>
+  <canvas class="dissolve" id="dissolve" aria-hidden="true"></canvas>
+
+  <div class="sky" id="sky" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Jogo da Velha Cloud Edition — início">
+      <span class="brand__logo" id="brandLogo" aria-hidden="true"></span>
+      <span class="brand__name pixel">Jogo da velha</span>
+      <span class="badge pixel">Cloud edition</span>
+    </a>
+    <nav class="topbar__actions" aria-label="Ações">
+      <button class="btn btn--ghost" id="infraBtn" type="button">
+        <span class="btn__key" aria-hidden="true">I</span> Infra
+      </button>
+      <button class="btn btn--ghost" id="soundBtn" type="button" aria-pressed="true">
+        <span class="btn__key" aria-hidden="true">M</span> <span id="soundLabel">Som on</span>
+      </button>
+    </nav>
+  </header>
+
+  <main class="arena">
+    <aside class="panel panel--setup" aria-label="Configurações da partida">
+      <section class="field">
+        <h2 class="field__title pixel">Adversário</h2>
+        <div class="seg" role="radiogroup" aria-label="Adversário" data-setting="opponent">
+          <button class="opt" type="button" role="radio" data-value="cpu">
+            <span class="opt__name pixel">vs Nimbus</span>
+            <span class="opt__desc">Você contra a IA da nuvem</span>
+          </button>
+          <button class="opt" type="button" role="radio" data-value="pvp">
+            <span class="opt__name pixel">2 jogadores</span>
+            <span class="opt__desc">Mesmo teclado, mesma tela</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="field" id="difficultyField">
+        <h2 class="field__title pixel">Dificuldade</h2>
+        <div class="seg seg--row" role="radiogroup" aria-label="Dificuldade" data-setting="difficulty">
+          <button class="opt opt--compact pixel" type="button" role="radio" data-value="easy">Fácil</button>
+          <button class="opt opt--compact pixel" type="button" role="radio" data-value="medium">Médio</button>
+          <button class="opt opt--compact pixel" type="button" role="radio" data-value="hard">Impossível</button>
+        </div>
+      </section>
+
+      <section class="field">
+        <h2 class="field__title pixel">Regra</h2>
+        <div class="seg" role="radiogroup" aria-label="Regra" data-setting="mode">
+          <button class="opt" type="button" role="radio" data-value="classic">
+            <span class="opt__name pixel">Clássica</span>
+            <span class="opt__desc">3 em linha. Tabuleiro cheio = velha.</span>
+          </button>
+          <button class="opt" type="button" role="radio" data-value="infinite">
+            <span class="opt__name pixel">Velha infinita <span class="new pixel">novo</span></span>
+            <span class="opt__desc">Só 3 peças cada. A mais antiga evapora.</span>
+          </button>
+        </div>
+      </section>
+
+      <dl class="keys">
+        <div><dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>jogar na casa</dd></div>
+        <div><dt><kbd>R</kbd></dt><dd>nova rodada</dd></div>
+        <div><dt><kbd>M</kbd></dt><dd>som</dd></div>
+        <div><dt><kbd>I</kbd></dt><dd>ver a infra</dd></div>
+      </dl>
+    </aside>
+
+    <section class="stage" aria-label="Tabuleiro">
+      <div class="turn" id="turn">
+        <span class="turn__chip" id="turnChip" aria-hidden="true"></span>
+        <p class="turn__label pixel" id="turnLabel" aria-live="polite">Sua vez</p>
+        <p class="turn__meta pixel" id="turnMeta"></p>
+      </div>
+
+      <div class="board-frame" id="boardFrame">
+        <div class="board" id="board" role="group" aria-label="Tabuleiro 3 por 3"></div>
+        <canvas class="board__fx" id="boardFx" aria-hidden="true"></canvas>
+
+        <div class="result" id="result" hidden>
+          <div class="result__box" role="status">
+            <div class="result__sprite" id="resultSprite" aria-hidden="true"></div>
+            <p class="result__title pixel" id="resultTitle"></p>
+            <p class="result__sub" id="resultSub"></p>
+            <button class="btn" id="againBtn" type="button">Jogar de novo <span aria-hidden="true">↵</span></button>
+          </div>
+        </div>
+      </div>
+
+      <p class="stage__hint" id="stageHint">Clique numa casa ou use o teclado.</p>
+    </section>
+
+    <aside class="panel panel--side" aria-label="Placar e adversário">
+      <section class="score" aria-labelledby="scoreTitle">
+        <div class="score__head">
+          <h2 class="field__title pixel" id="scoreTitle">Placar</h2>
+          <button class="link-btn pixel" id="resetScoreBtn" type="button">Zerar</button>
+        </div>
+        <div class="score__grid">
+          <div class="score__cell score__cell--x">
+            <span class="score__label pixel" id="scoreLabelX">Você</span>
+            <span class="score__value pixel" id="scoreX">0</span>
+          </div>
+          <div class="score__cell score__cell--d">
+            <span class="score__label pixel">Velhas</span>
+            <span class="score__value pixel" id="scoreD">0</span>
+          </div>
+          <div class="score__cell score__cell--o">
+            <span class="score__label pixel" id="scoreLabelO">Nimbus</span>
+            <span class="score__value pixel" id="scoreO">0</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="bot" id="bot" aria-labelledby="botName">
+        <div class="bot__head">
+          <div class="bot__sprite" id="botSprite" aria-hidden="true"></div>
+          <div>
+            <h2 class="bot__name pixel" id="botName">Nimbus</h2>
+            <p class="bot__role">IA minimax · poda α-β</p>
+          </div>
+        </div>
+        <div class="bubble">
+          <p class="bubble__text" id="botSay" aria-hidden="true"></p>
+          <p class="sr-only" id="botSayLive" aria-live="polite"></p>
+        </div>
+        <p class="bot__stats pixel" id="botStats"></p>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="hud" id="hud" aria-label="Status da nuvem">
+    <span class="hud__item hud__status"><span class="hud__dot" aria-hidden="true"></span><span id="hudStatus">Conectando…</span></span>
+    <span class="hud__item"><span class="hud__k">Provedor</span><span id="hudProvider">—</span></span>
+    <span class="hud__item"><span class="hud__k">Serviço</span><span id="hudService">—</span></span>
+    <span class="hud__item"><span class="hud__k">Região</span><span id="hudRegion">—</span></span>
+    <span class="hud__item"><span class="hud__k">Edge</span><span id="hudEdge">—</span></span>
+    <span class="hud__item"><span class="hud__k">Cache</span><span id="hudCache">—</span></span>
+    <span class="hud__item hud__ping">
+      <span class="hud__k">Ping</span><span id="hudPing">—</span>
+      <span class="spark" id="hudSpark" aria-hidden="true"></span>
+    </span>
+  </footer>
+
+  <dialog class="infra" id="infra" aria-labelledby="infraTitle">
+    <div class="infra__head">
+      <h2 class="pixel" id="infraTitle">Como isso chega até você</h2>
+      <button class="btn btn--ghost btn--sm" id="infraClose" type="button" aria-label="Fechar">✕</button>
+    </div>
+    <ol class="infra__flow" id="infraFlow"></ol>
+    <ul class="infra__facts" id="infraFacts"></ul>
+  </dialog>
+
+  <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
+
+  <script src="js/game.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/cloud.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
